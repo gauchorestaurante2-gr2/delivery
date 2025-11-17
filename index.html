@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="pt-BR">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Churrascaria Gaucho - Pedido via WhatsApp</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            box-sizing: border-box;
+        }
+        
+        .fade-in { 
+            animation: fadeIn 0.3s ease-in; 
+        }
+        
+        @keyframes fadeIn { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        
+        .pulse-green { 
+            animation: pulse-green 2s infinite; 
+        }
+        
+        @keyframes pulse-green { 
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 
+            50% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); } 
+        }
+        
+        .cart-item {
+            transition: all 0.3s ease;
+        }
+        
+        .cart-item:hover {
+            transform: translateX(5px);
+        }
+        
+        .menu-item {
+            transition: all 0.2s ease;
+        }
+        
+        .menu-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+    </style>
+  <style>@view-transition { navigation: auto; }</style>
+ </head>
+ <body class="bg-gradient-to-br from-orange-50 to-red-50 min-h-full">
+  <div id="app" class="min-h-full"></div>
+  <script>
+        // ====== Configuration ======
+        const defaultConfig = {
+            restaurant_name: "Churrascaria Gaucho",
+            whatsapp_number: "5511939426652",
+            delivery_info: "Delivery disponível das 11h às 22h"
+        };
+
+        let config = { ...defaultConfig };
+
+        // ====== Utilitários ======
+        const ADMIN_PASSWORD = "170183mf";
+        const LS_MENU_KEY = "menuData-v1";
+
+        function currency(v) {
+            if (typeof v !== "number" || isNaN(v)) return "R$ 0,00";
+            return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        }
+
+        function encodeWhatsAppText(text) {
+            return encodeURIComponent(text);
+        }
+
+        // ====== Dados do Menu ======
+        const defaultMenu = [
+            {
+                id: "cat-marmitex",
+                name: "MARMITEX",
+                products: [
+                    { id: "m1", name: "Costela no Bafo", sizes: { P: 26.0, G: 30.0 } },
+                    { id: "m2", name: "Brisket", sizes: { P: 26.0, G: 30.0 } },
+                    { id: "m3", name: "Fraldinha Texana", sizes: { P: 26.0, G: 30.0 } },
+                    { id: "m4", name: "Filé de frango grelhado", sizes: { P: 20.0, G: 23.0 } },
+                    { id: "m5", name: "Calabresa acebolada", sizes: { P: 20.0, G: 23.0 } },
+                    { id: "m6", name: "Bife em tiras com fritas", sizes: { P: 26.0, G: 28.0 } },
+                    { id: "m7", name: "Bife acebolado", sizes: { P: 26.0, G: 28.0 } },
+                    { id: "m8", name: "Omelete (Tomate, Cebola e queijo)", sizes: { P: 20.0, G: 24.0 } },
+                    { id: "m9", name: "Filé de frango à milanesa", sizes: { P: 23.0, G: 27.0 } },
+                    { id: "m10", name: "Bife à milanesa", sizes: { P: 27.0, G: 30.0 } },
+                    { id: "m11", name: "Parmegiana de frango", sizes: { P: 26.0, G: 28.0 } },
+                    { id: "m12", name: "Parmegiana de carne", sizes: { P: 29.0, G: 32.0 } },
+                    { id: "m13", name: "Frango Assado", sizes: { P: 23.0, G: 26.0 } },
+                    { id: "m14", name: "Linguiça", sizes: { P: 23.0, G: 26.0 } },
+                ],
+            },
+            {
+                id: "cat-porcao",
+                name: "PORÇÃO",
+                products: [
+                    { id: "p1", name: "Pão com Carne", price: 20.0 },
+                    { id: "p2", name: "000", sizes: { P: 0.0, G: 0.0 } },
+                    { id: "p3", name: "Costela no Bafo", sizes: { "Meio Kilo": 40.0, "Kilo": 80.0 } },
+                    { id: "p4", name: "Brisket", sizes: { "Meio Kilo": 40.0, "Kilo": 80.0 } },
+                    { id: "p5", name: "Fraldinha Texana", sizes: { "Meio Kilo": 40.0, "Kilo": 80.0 } },
+                ],
+            },
+            {
+                id: "cat-feijoada",
+                name: "FEIJOADA LIGHT",
+                description: "Todos os Sábados – Acompanha Farofa, Couve e Torresmo, vinagrete, bisteca, banana, gomo de laranja, molho de pimenta e caipirinha",
+                products: [
+                    { id: "f1", name: "Feijoada Light (sábados)", sizes: { P: 35.0, G: 50.0 } },
+                ],
+            },
+            {
+                id: "cat-massas",
+                name: "MASSAS ITALIANA",
+                products: [
+                    { id: "i1", name: "Rondelli Presunto e Queijo", price: 30.0 },
+                    { id: "i2", name: "Lasanha Bolonhesa", price: 28.0 },
+                    { id: "i3", name: "Espaguete à Carbonara", price: 25.0 },
+                    { id: "i4", name: "Penne ao Molho Branco", price: 24.0 },
+                ],
+            },
+            {
+                id: "cat-bebidas",
+                name: "BEBIDAS",
+                products: [
+                    { id: "b1", name: "Refrigerante Lata", price: 6.0 },
+                    { id: "b2", name: "Coca Cola 2L", price: 18.0 },
+                    { id: "b3", name: "Água Mineral", price: 4.5 },
+                    { id: "b4", name: "Suco Polpa 500 Ml", price: 12.0 },
+                    { id: "b5", name: "Cerveja Long Neck", price: 8.0 },
+                ],
+            },
+            {
+                id: "cat-delivery",
+                name: "TAXA DE ENTREGA POR BAIRRO",
+                description: "Selecione seu bairro para calcular a taxa de entrega",
+                products: [
+                    { id: "d1", name: "Álamos R4", price: 15.0 },
+                    { id: "d2", name: "Colônia", price: 5.0 },
+                    { id: "d3", name: "Chácara São Silvestre", price: 12.0 },
+                    { id: "d4", name: "Estrada da Barragem", price: 8.0 },
+                    { id: "d5", name: "Jardim Aladim", price: 15.0 },
+                    { id: "d6", name: "Jardim Almeida", price: 15.0 },
+                    { id: "d7", name: "Jardim das Oliveiras", price: 7.0 },
+                    { id: "d8", name: "Jardim Progresso", price: 18.0 },
+                    { id: "d9", name: "Jardim Santa Fé", price: 9.0 },
+                    { id: "d10", name: "Nova América", price: 9.0 },
+                    { id: "d11", name: "Parelheiros", price: 9.0 },
+                    { id: "d12", name: "Parque Amazonas", price: 9.0 },
+                    { id: "d13", name: "Parque Recreio", price: 15.0 },
+                    { id: "d14", name: "Recanto", price: 15.0 },
+                    { id: "d15", name: "Santa Terrezinha", price: 7.0 },
+                    { id: "d16", name: "Silveira", price: 5.0 },
+                    { id: "d17", name: "São Nicolau", price: 15.0 },
+                    { id: "d18", name: "São Noberto", price: 15.0 },
+                    { id: "d19", name: "Ursino Ribeiro", price: 15.0 },
+                    { id: "d20", name: "Vargem Grande", price: 3.0 },
+                    { id: "d21", name: "Vargem Grande II", price: 9.0 },
+                    { id: "d22", name: "Vila Rocha", price: 15.0 },
+                    { id: "d23", name: "Vila Rochel", price: 12.0 },
+                ],
+            }
+        ];
+
+        // ====== Estado da Aplicação ======
+        let currentMenu = [...defaultMenu];
+        let cart = [];
+        let currentView = "menu";
+        let isAdmin = false;
+
+        // ====== Gerenciamento do Menu ======
+        function saveMenu() {
+            localStorage.setItem(LS_MENU_KEY, JSON.stringify(currentMenu));
+        }
+
+        function loadMenu() {
+            const saved = localStorage.getItem(LS_MENU_KEY);
+            if (saved) {
+                try {
+                    currentMenu = JSON.parse(saved);
+                } catch (e) {
+                    currentMenu = [...defaultMenu];
+                }
+            }
+        }
+
+        // ====== Gerenciamento do Carrinho ======
+        function addToCart(productId, categoryId, size = null) {
+            const category = currentMenu.find(c => c.id === categoryId);
+            const product = category?.products.find(p => p.id === productId);
+            
+            if (!product) return;
+
+            let price, itemName;
+            if (size && product.sizes) {
+                price = product.sizes[size] ?? 0;
+                itemName = `${product.name} (${size})`;
+            } else {
+                price = product.price ?? 0;
+                itemName = product.name;
+            }
+
+            const existingItem = cart.find(item => 
+                item.productId === productId && item.size === size
+            );
+
+            if (existingItem) {
+                existingItem.quantity += 1;
+            } else {
+                cart.push({
+                    productId,
+                    categoryId,
+                    name: itemName,
+                    price,
+                    quantity: 1,
+                    size
+                });
+            }
+
+            showNotification("Item adicionado ao carrinho!", "success");
+            render();
+        }
+
+        function removeFromCart(index) {
+            cart.splice(index, 1);
+            showNotification("Item removido do carrinho!", "info");
+            render();
+        }
+
+        function updateCartQuantity(index, newQuantity) {
+            if (newQuantity <= 0) {
+                removeFromCart(index);
+            } else {
+                cart[index].quantity = newQuantity;
+                render();
+            }
+        }
+
+        function getCartTotal() {
+            return cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+        }
+
+        function clearCart() {
+            cart = [];
+            showNotification("Carrinho limpo!", "info");
+            render();
+        }
+
+        // ====== WhatsApp ======
+        function sendWhatsAppOrder() {
+            if (cart.length === 0) {
+                showNotification("Adicione itens ao carrinho primeiro!", "error");
+                return;
+            }
+
+            let message = `🍖 *PEDIDO - ${config.restaurant_name}*\n\n`;
+            
+            cart.forEach((item, index) => {
+                message += `${index + 1}. ${item.name}\n`;
+                message += `   Qtd: ${item.quantity}x | ${currency(item.price)} = ${currency(item.price * item.quantity)}\n\n`;
+            });
+
+            message += `💰 *Total: ${currency(getCartTotal())}*\n\n`;
+            const payment = document.getElementById('paymentMethod')?.value || 'Não informado';
+            const deliveryArea = document.getElementById('deliveryArea')?.value || 'Não informado';
+            const name = document.getElementById('customerName')?.value || 'Não informado';
+            const address = document.getElementById('customerAddress')?.value || 'Não informado';
+            const customerPhone = document.getElementById('customerPhone')?.value || 'Não informado';
+
+            // Adiciona informações do cliente e entrega
+            message += `👤 *Nome:* ${name}\n`;
+            message += `🏠 *Endereço:* ${address}\n`;
+            message += `📞 *Telefone:* ${customerPhone}\n`;
+            message += `📍 *Bairro:* ${deliveryArea}\n`;
+            message += `💳 *Pagamento:* ${payment}\n\n`;
+            message += `📱 Pedido feito pelo site\n`;
+            message += `🕐 ${new Date().toLocaleString('pt-BR')}`;
+
+            const whatsappUrl = `https://wa.me/${config.whatsapp_number}?text=${encodeWhatsAppText(message)}`;
+            window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+        }
+
+        // ====== Notificações ======
+        function showNotification(message, type = "info") {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg text-white fade-in ${
+                type === 'success' ? 'bg-green-500' : 
+                type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+            }`;
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+
+        // ====== Administração ======
+        function toggleAdmin() {
+            const password = prompt("Digite a senha de administrador:");
+            if (password === ADMIN_PASSWORD) {
+                isAdmin = !isAdmin;
+                showNotification(isAdmin ? "Modo admin ativado!" : "Modo admin desativado!", "success");
+                render();
+            } else if (password !== null) {
+                showNotification("Senha incorreta!", "error");
+            }
+        }
+
+        function resetMenu() {
+            if (confirm("Tem certeza que deseja resetar o menu para o padrão?")) {
+                currentMenu = [...defaultMenu];
+                saveMenu();
+                showNotification("Menu resetado!", "success");
+                render();
+            }
+        }
+
+        // ====== Renderização ======
+        function renderHeader() {
+            return `
+                <header class="bg-gradient-to-r from-red-600 to-orange-600 text-white shadow-lg">
+                    <div class="container mx-auto px-4 py-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h1 class="text-3xl font-bold">${config.restaurant_name}</h1>
+                                <p class="text-red-100 mt-1">${config.delivery_info}</p>
+                            </div>
+                            <div class="flex items-center space-x-4">
+                                ${cart.length > 0 ? `
+                                    <button onclick="currentView = 'cart'; render();" 
+                                            class="bg-white text-red-600 px-4 py-2 rounded-lg font-semibold hover:bg-red-50 transition-colors flex items-center space-x-2">
+                                        <span>🛒</span>
+                                        <span>Carrinho (${cart.length})</span>
+                                    </button>
+                                ` : ''}
+                                <button onclick="toggleAdmin()" 
+                                        class="text-white hover:text-red-200 transition-colors">
+                                    ⚙️
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+            `;
+        }
+
+        function renderNavigation() {
+            if (currentView === 'menu') return '';
+            
+            return `
+                <div class="bg-white shadow-sm border-b">
+                    <div class="container mx-auto px-4 py-3">
+                        <button onclick="currentView = 'menu'; render();" 
+                                class="text-red-600 hover:text-red-800 font-medium flex items-center space-x-2">
+                            <span>←</span>
+                            <span>Voltar ao Menu</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMenu() {
+            return `
+                <main class="container mx-auto px-4 py-8">
+                    ${currentMenu.map(category => `
+                        <section class="mb-12">
+                            <div class="text-center mb-8">
+                                <h2 class="text-3xl font-bold text-gray-800 mb-2">${category.name}</h2>
+                                ${category.description ? `
+                                    <p class="text-gray-600 max-w-2xl mx-auto">${category.description}</p>
+                                ` : ''}
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                ${category.products.map(product => `
+                                    <div class="menu-item bg-white rounded-xl shadow-md p-6 border border-gray-100">
+                                        <h3 class="font-semibold text-lg text-gray-800 mb-4">${product.name}</h3>
+                                        
+                                        ${product.sizes ? `
+                                            <div class="space-y-2">
+                                                ${Object.entries(product.sizes).map(([size, price]) => `
+                                                    <div class="flex justify-between items-center">
+                                                        <span class="text-gray-600">${size}</span>
+                                                        <div class="flex items-center space-x-3">
+                                                            <span class="font-semibold text-green-600">${currency(price ?? 0)}</span>
+                                                            <button onclick="addToCart('${product.id}', '${category.id}', '${size}')"
+                                                                    class="bg-red-600 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-700 transition-colors">
+                                                                Adicionar
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        ` : `
+                                            <div class="flex justify-between items-center">
+                                                <span class="font-semibold text-green-600 text-xl">${currency(product.price ?? 0)}</span>
+                                                <button onclick="addToCart('${product.id}', '${category.id}')"
+                                                        class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors">
+                                                    Adicionar
+                                                </button>
+                                            </div>
+                                        `}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </section>
+                    `).join('')}
+                    
+                    ${isAdmin ? `
+                        <div class="mt-12 p-6 bg-yellow-50 border border-yellow-200 rounded-lg">
+                            <h3 class="text-lg font-semibold text-yellow-800 mb-4">🔧 Painel Administrativo</h3>
+                            <div class="space-x-4">
+                                <button onclick="resetMenu()" 
+                                        class="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors">
+                                    Resetar Menu
+                                </button>
+                            </div>
+                        </div>
+                    ` : ''}
+                </main>
+            `;
+        }
+
+        function renderCart() {
+            if (cart.length === 0) {
+                return `
+                    <main class="container mx-auto px-4 py-8">
+                        <div class="text-center py-12">
+                            <div class="text-6xl mb-4">🛒</div>
+                            <h2 class="text-2xl font-semibold text-gray-800 mb-2">Carrinho Vazio</h2>
+                            <p class="text-gray-600 mb-6">Adicione alguns itens deliciosos ao seu carrinho!</p>
+                            <button onclick="currentView = 'menu'; render();" 
+                                    class="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition-colors">
+                                Ver Menu
+                            </button>
+                        </div>
+                    </main>
+                `;
+            }
+
+            return `
+                <main class="container mx-auto px-4 py-8">
+                    <div class="max-w-2xl mx-auto">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-6">Seu Pedido</h2>
+                        
+                        <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                            ${cart.map((item, index) => `
+                                <div class="cart-item p-4 border-b border-gray-100 last:border-b-0">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex-1">
+                                            <h3 class="font-semibold text-gray-800">${item.name}</h3>
+                                            <p class="text-gray-600">${currency(item.price)} cada</p>
+                                        </div>
+                                        <div class="flex items-center space-x-3">
+                                            <div class="flex items-center space-x-2">
+                                                <button onclick="updateCartQuantity(${index}, ${item.quantity - 1})"
+                                                        class="w-8 h-8 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-colors">
+                                                    -
+                                                </button>
+                                                <span class="w-8 text-center font-semibold">${item.quantity}</span>
+                                                <button onclick="updateCartQuantity(${index}, ${item.quantity + 1})"
+                                                        class="w-8 h-8 bg-gray-200 text-gray-700 rounded-full hover:bg-gray-300 transition-colors">
+                                                    +
+                                                </button>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="font-semibold text-green-600">${currency(item.price * item.quantity)}</div>
+                                                <button onclick="removeFromCart(${index})"
+                                                        class="text-red-500 hover:text-red-700 text-sm">
+                                                    Remover
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                            
+                            <div class="p-4 bg-gray-50">
+                                <div class="flex justify-between items-center text-xl font-bold">
+                                    <span>Total:</span>
+                                    <span class="text-green-600">${currency(getCartTotal())}</span>
+                                </div>
+                            </div>
+
+<!-- Forma de Pagamento -->
+<div class="mt-4 bg-white p-4 rounded-lg shadow">
+    <label class="block font-semibold text-gray-700 mb-2">Forma de Pagamento:</label>
+    <select id="paymentMethod" class="w-full border rounded-lg p-3">
+        <option value="Pix">Pix</option>
+        <option value="Dinheiro">Dinheiro</option>
+        <option value="Débito">Débito</option>
+        <option value="Crédito">Crédito</option>
+    </select>
+</div>
+
+<!-- Bairro de Entrega -->
+<div class="mt-4 bg-white p-4 rounded-lg shadow">
+    <label class="block font-semibold text-gray-700 mb-2">Selecione o Bairro para Entrega:</label>
+    <select id="deliveryArea" class="w-full border rounded-lg p-3">
+        <option value="Álamos R4">Álamos R4</option>
+        <option value="Colônia">Colônia</option>
+        <option value="Chácara São Silvestre">Chácara São Silvestre</option>
+        <option value="Estrada da Barragem">Estrada da Barragem</option>
+        <option value="Jardim Aladim">Jardim Aladim</option>
+        <option value="Jardim Almeida">Jardim Almeida</option>
+        <option value="Jardim das Oliveiras">Jardim das Oliveiras</option>
+        <option value="Jardim Progresso">Jardim Progresso</option>
+        <option value="Jardim Santa Fé">Jardim Santa Fé</option>
+        <option value="Nova América">Nova América</option>
+        <option value="Parelheiros">Parelheiros</option>
+        <option value="Parque Amazonas">Parque Amazonas</option>
+        <option value="Parque Recreio">Parque Recreio</option>
+        <option value="Recanto">Recanto</option>
+        <option value="Santa Terrezinha">Santa Terrezinha</option>
+        <option value="Silveira">Silveira</option>
+        <option value="São Nicolau">São Nicolau</option>
+        <option value="São Noberto">São Noberto</option>
+        <option value="Ursino Ribeiro">Ursino Ribeiro</option>
+        <option value="Vargem Grande">Vargem Grande</option>
+        <option value="Vargem Grande II">Vargem Grande II</option>
+        <option value="Vila Rocha">Vila Rocha</option>
+        <option value="Vila Rochel">Vila Rochel</option>
+    </select>
+</div>
+
+<!-- Dados do Cliente -->
+<div class="mt-4 bg-white p-4 rounded-lg shadow">
+    <label class="block font-semibold text-gray-700 mb-2">Nome Completo:</label>
+    <input id="customerName" type="text" class="w-full border rounded-lg p-3" placeholder="Digite seu nome" />
+</div>
+
+<div class="mt-4 bg-white p-4 rounded-lg shadow">
+    <label class="block font-semibold text-gray-700 mb-2">Endereço Completo:</label>
+    <input id="customerAddress" type="text" class="w-full border rounded-lg p-3" placeholder="Rua, número, complemento..." />
+</div>
+
+<div class="mt-4 bg-white p-4 rounded-lg shadow">
+    <label class="block font-semibold text-gray-700 mb-2">Telefone para Contato:</label>
+    <input id="customerPhone" type="text" class="w-full border rounded-lg p-3" placeholder="(11) 90000-0000" />
+</div>
+                        </div>
+                        
+                        <div class="mt-6 space-y-3">
+                            <button onclick="sendWhatsAppOrder()" 
+                                    class="w-full bg-green-600 text-white py-4 rounded-lg font-semibold hover:bg-green-700 transition-colors pulse-green flex items-center justify-center space-x-2">
+                                <span>📱</span>
+                                <span>Finalizar Pedido via WhatsApp</span>
+                            </button>
+                            
+                            <button onclick="clearCart()" 
+                                    class="w-full bg-gray-500 text-white py-3 rounded-lg hover:bg-gray-600 transition-colors">
+                                Limpar Carrinho
+                            </button>
+                        </div>
+                    </div>
+                </main>
+            `;
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                ${renderHeader()}
+                ${renderNavigation()}
+                ${currentView === 'menu' ? renderMenu() : renderCart()}
+            `;
+        }
+
+        // ====== Element SDK Integration (opcional) ======
+        async function onConfigChange(newConfig) {
+            Object.assign(config, newConfig);
+            render();
+        }
+
+        function mapToCapabilities(config) {
+            return {
+                recolorables: [],
+                borderables: [],
+                fontEditable: undefined,
+                fontSizeable: undefined
+            };
+        }
+
+        function mapToEditPanelValues(config) {
+            return new Map([
+                ["restaurant_name", config.restaurant_name || defaultConfig.restaurant_name],
+                ["whatsapp_number", config.whatsapp_number || defaultConfig.whatsapp_number],
+                ["delivery_info", config.delivery_info || defaultConfig.delivery_info]
+            ]);
+        }
+
+        // ====== Inicialização ======
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMenu();
+            render();
+        });
+    </script>
+ </body>
+</html>
